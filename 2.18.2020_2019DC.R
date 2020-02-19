@@ -1,3 +1,6 @@
+#download dataset to working directory
+#https://drive.google.com/open?id=1p9CtNgDE5Lj1muEkxQqfOWdop2NiAEjV
+
 #clear all prior data and work to ensure a clean environment
 rm(list=ls())
 
@@ -7,7 +10,7 @@ setwd("~/Desktop/Data Workflow/R practice")
 #open tidyverse
 library(tidyverse)
 
-#open file; this particular package allows R to open .csv and excel files
+#open package to open .csv and excel files
 library(readxl)  
 
 
