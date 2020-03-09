@@ -1,0 +1,367 @@
+---
+title: "Paula Kim_Homework 1-5"
+class: "[2020 SPRING] Data Workflow"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+
+### SETUP ###
+
+#clear all prior work to ensure a clean environment
+rm(list=ls())
+
+#download dataset to intended working directory
+#https://drive.google.com/open?id=1p9CtNgDE5Lj1muEkxQqfOWdop2NiAEjV
+
+#set working directory to folder where dataset is saved
+setwd("~/Desktop/Data Workflow/R practice")
+
+#program to open tidyverse
+library(tidyverse)
+
+#program to open .csv and excel files
+library(readxl) 
+```
+
+```{r}
+### LOAD AND OPEN LEFT DATASET ###
+dc2019star <-read_excel("2019DCSchoolReportCardMetricScoresPublicData.xlsx", 
+                                   sheet = "School STAR Metric Scores"
+) 
+View(dc2019star)
+
+### PLAN TO MUNGE LEFT DATASET -- VARIABLES AND OBSERVATIONS TO KEEP ###
+
+### Variable descriptions pulled from "Data Dictionary" sheet in original Excel file
+## "LEA Code": 3-4 digit identifier unique to each local education agency  
+#            ***will keep only observations "001" for DCPS and drop all others (charter, alternative); 
+#            renders LEA Name redundant because all kept observations reflect DCPS only
+## "School Name": name of school
+## "School Code": 3-4 digit identifier unique to each school
+## "School Framework": school's gradeband configuration 
+#            ***will keep only observations "Elementary School with Pre-Kindergarten" 
+#            ***drop others (Alternative Framework, Elementary School without Pre-Kindergarten,
+#            High School, Middle School)
+## "Student Group": STAR Framework measures performance for student groups with a minimum n size of 10
+#            ***will keep only observations for 7 ESSA-defined racial/ethnic groups: 
+#            "American Indian or Alaskan Native", "Asian","Black or African American",
+#            "Hispanic/Latino of any race", "Native Hawaiian or Other Pacific Islander", 
+#            "Two or more races", White" 
+#            ***will drop other study group designations
+## "Metric": STAR Framework metrics are designed to share information about student success and 
+#            progress using different data elements associated with positive student outcomes
+#            ***will keep "90% Attendance", "Meeting or Exceeding Expectations - ELA",
+#            "Meeting or Exceeding Expectations - Math" 
+#            ***will drop other metrics
+## "Metric Score": Score earned by the school on a given metric for a given student group
+#            ***will drop due to lack of clear documentation re: how scores are calculated   
+## "Metric N": Number of students in a given student group included for a given metric 
+## "Domain", "Floor", "Target", "Metric Points Earned", "Metric Points Possible" 
+#            ***will drop all five columns due to limited data; seem to be largely reflect  
+#               aggregate scores or are specific to students with disabilities
+## "School Year": 2018-2019
+#            ***will drop to keep dataset simple; all observations for 2018-2019 academic year
+```
+
+```{r}
+### LEFT DATASET | SELECT VARIABLES (i.e., columns) OF INTEREST 
+## drop "LEA Name", "Domain", Metric Score","Floor", "Target", "Metric Points Earned", 
+##      "Metric Points Possible", and "School Year" due to redundancy or limited data that largely reflect
+##       aggregate scores or are specific to students with disabilities     
+
+stardraft <- select(dc2019star,
+    "LEA Code","School Name","School Code","School Framework","Student Group","Metric","Metric N"                  
+)
+View(stardraft)
+```
+
+
+```{r}
+### LEFT DATASET | RENAME VARIABLES (i.e., columns) OF INTEREST INTO ABBREVIATIONS
+
+stardraft2 <- rename(stardraft,
+                   leaid = "LEA Code", schnme = "School Name", schid = "School Code", 
+                   schtype = "School Framework", stugrp = "Student Group",
+                   mtrc = "Metric",mtrcnum = "Metric N"
+)
+View(stardraft2)
+```
+ 
+```{r}
+### LEFT DATASET | FILTER OBSERVATIONS (i.e., rows) OF INTEREST
+## leaid: keep only observations "001" for DCPS 
+#           and drop all others (e.g., charter, alternative)
+## schtype: keep only observations "Elementary School with Pre-Kindergarten" 
+#           and drop all others (e.g., elementary schools without pre-k, middle schools, high schools)
+## stugrp: keep only observations for 7 ESSA-defined racial/ethnic groups + observations that
+#           relect "All Students": 
+#           "American Indian or Alaskan Native", "Asian","Black or African American",
+#           "Hispanic/Latino of any race", "Native Hawaiian or Other Pacific Islander", 
+#           "Two or more races", White" 
+#           and drop all others 
+## mtrc: keep "90% Attendance", "Meeting or Exceeding Expectations - ELA",
+#           "Meeting or Exceeding Expectations - Math" 
+#           and drop all others 
+
+stardraft3 <- filter(stardraft2,
+    leaid == "001",
+    schtype == "Elementary School with Pre-Kindergarten",
+    stugrp %in% c("All Students",
+                  "American Indian/Alaskan Native",
+                  "Asian",
+                  "Black/African-American",
+                  "Hispanic/Latino of any race",
+                  "Native Hawaiian/Other Pacific Islander", 
+                  "Two or more races",
+                  "White"),
+    mtrc %in% c("90% Attendance",
+                "Meeting or Exceeding Expectations - ELA",
+                "Meeting or Exceeding Expectations - Math") 
+)
+View(stardraft3)
+```
+
+```{r}
+### LEFT DATASET | RESHAPE FROM LONG TO WIDE BY SCHID
+
+star_wide <- pivot_wider(stardraft3,
+                         c(schnme,schid),
+                           names_from = c("stugrp","mtrc"),
+                           names_sep = "_",
+                           values_from = mtrcnum
+)
+View(star_wide)
+```
+
+
+```{r}
+### LEFT DATASET | RESHAPE FROM WIDE TO LONG 
+
+star_long <- pivot_longer(star_wide,
+                          -c(schnme,schid),
+                             names_to = "stugrp_mtrc",
+                             values_to = "mtrcnum"
+) %>% mutate(stugrp_mtrc = as.factor(stugrp_mtrc)
+)
+View(star_long)
+```
+
+
+```{r}
+### LOAD AND OPEN RIGHT DATASET ###
+dc2019card <-read_excel("2019DCSchoolReportCardMetricScoresPublicData.xlsx", 
+                                   sheet = "School Report Card Only Metrics"
+)
+View(dc2019card)
+
+### PLAN TO MUNGE RIGHT DATASET -- VARIABLES AND OBSERVATIONS TO KEEP ###
+
+### Variable descriptions pulled from "Data Dictionary" sheet in original Excel file
+## "LEA Code": 3-4 digit identifier unique to each local education agency  
+#            ***will keep only observations "001" for DCPS and drop all others (charter, alternative); 
+#            renders LEA Name redundant because all kept observations reflect DCPS only
+## "School Name": name of school
+## "School Code": 3-4 digit identifier unique to each school
+## "Student Group": DC School Report Card includes metrics for student groups with a minimum n size of 10
+#            ***will keep only observations for 7 ESSA-defined racial/ethnic groups: 
+#            "American Indian or Alaskan Native", "Asian","Black or African American",
+#            "Hispanic/Latino of any race", "Native Hawaiian or Other Pacific Islander", 
+#            "Two or more races", White" 
+#            ***will drop other study group designations
+## "Metric": DC School Report Card  metrics are designed to share information about student success and 
+#            progress using different data elements associated with positive student outcomes
+#            ***will keep "All Suspensions", "Incidents of Violence Count", "Harassment Count"
+#            ***will drop other metrics
+## "Metric Score": Score earned by the school on a given metric for a given student group
+#            ***will drop due to lack of clear documentation re: how scores are calculated   
+## "Metric N": Number of students in a given student group included for a given metric 
+## "School Year": 2018-2019
+#            ***will drop to keep dataset simple; all observations for 2018-2019 academic year
+```
+
+```{r}
+### RIGHT DATASET | SELECT VARIABLES (i.e., columns) OF INTEREST 
+## drop "LEA Name","Metric Score", and "School Year" due to redundancy or limited data 
+##       that largely reflect aggregate scores or are specific to students with disabilities
+
+carddraft <- select(dc2019card,
+    "LEA Code","School Name","School Code","Student Group","Metric","Metric N"                  
+)
+View(carddraft)
+```
+
+```{r}
+### RIGHT DATASET | RENAME VARIABLES (i.e., columns) OF INTEREST INTO ABBREVIATIONS
+
+carddraft2 <- rename(carddraft,
+                       leaid = "LEA Code", schnme = "School Name", schid = "School Code", 
+                       stugrp = "Student Group", mtrc = "Metric", mtrcnum = "Metric N"
+) 
+View(carddraft2)
+```
+
+```{r}
+### RIGHT DATASET | FILTER OBSERVATIONS (i.e., rows) OF INTEREST
+## leaid: keep only observations "001" for DCPS 
+#           and drop all others (e.g., charter, alternative)
+## stugrp: keep only observations for 7 ESSA-defined racial/ethnic groups + observations that
+#           relect "All Report Card Students": 
+#           "American Indian or Alaskan Native", "Asian","Black or African American",
+#           "Hispanic/Latino of any race", "Native Hawaiian or Other Pacific Islander", 
+#           "Two or more races", White" 
+#           and drop all others 
+## mtrc: keep "All Suspensions", "Incidents of Violence Count", "Harassment Count"
+#           and drop all others 
+
+carddraft3 <- filter(carddraft2,
+                       leaid == "001",
+                       stugrp %in% c("All Report Card Students",
+                                     "American Indian/Alaskan Native",
+                                     "Asian",
+                                     "Black/African-American",
+                                     "Hispanic/Latino of any race",
+                                     "Native Hawaiian/Other Pacific Islander",
+                                     "Two or more races",
+                                     "White"),
+                       mtrc %in% c("All Suspensions",
+                                   "Incidents of Violence Count", 
+                                   "Harassment Count")
+)
+View(carddraft3)
+```
+
+```{r}
+### RIGHT DATASET | RESHAPE FROM LONG TO WIDE BY SCHID
+
+card_wide <- pivot_wider(carddraft3,
+                                      c(schnme,schid),
+                                      names_from = c("stugrp","mtrc"),
+                                      names_sep = "_",
+                                      values_from = mtrcnum
+)
+View(card_wide)
+```
+
+```{r}
+### RIGHT DATASET | RESHAPE FROM WIDE TO LONG 
+
+card_long <- pivot_longer(card_wide,
+                                       -c(schnme,schid),
+                                       names_to = "stugrp_mtrc",
+                                       values_to = "mtrcnum"
+) %>% mutate(stugrp_mtrc = as.factor(stugrp_mtrc)
+)
+View(card_long)
+```
+
+```{r}
+### JOIN RIGHT AND LEFT WIDE DATASETS
+## NB: this action serves to filter schtypes != "Elementary School with Pre-Kindergarten" from card_wide
+
+combine_wide <- left_join(
+    star_wide, card_wide, by="schid"
+)
+
+View(combine_wide)
+```
+
+```{r}
+### CHECK FOR MISSING DATA
+View(
+   filter(combine_wide, !complete.cases(combine_wide))
+)
+## found missing values for Peabody Elementary School (Capitol Hill Cluster) in stardraft;
+## reason for missing values is unknown
+```
+
+```{r}
+### SELECT AND REMOVE REDUNDANT IDENTIFIER COLUMN
+
+analytic_wide <- select(combine_wide,
+                               -schnme.y
+)
+View(analytic_wide)
+```
+
+```{r}
+### RENAME IDENTIFIER COLUMN
+
+analytic_wide <- rename(analytic_wide,
+                        schnme = "schnme.x"
+)
+View(analytic_wide)
+```
+
+
+```{r}
+### SELECT AND REMOVE MISSING DATA (i.e., Peabody Elementary School)
+analytic_wide <- filter(analytic_wide,
+                        schid != "301"
+)
+View(analytic_wide)
+
+##### ANALYTIC_WIDE CONTAINS MASKED DATA #####
+```
+
+```{r}
+### COMBINED DATASET | RESHAPE FROM WIDE TO LONG 
+
+analytic_long <- pivot_longer(analytic_wide,
+                 -c(schnme,schid),
+                    names_to = "stugrp_mtrc",
+                    values_to = "mtrcnum"
+) %>% mutate(stugrp_mtrc = as.factor(stugrp_mtrc)
+)
+View(analytic_long)
+
+##### ANALYTIC_LONG CONTAINS MASKED DATA #####
+```
+
+```{r}
+### FOR THE SAKE OF THIS ASSIGNMENT, DROP MASKED VALUES "N<10"
+### MUTATE OBSERVATIONS OF MTRCNUM AS.NUMERIC
+
+analytic_nomasklong <- filter(analytic_long,
+                        mtrcnum != "n<10") %>%
+                       mutate(mtrcnum = as.numeric(mtrcnum)
+)
+View(analytic_nomasklong)
+
+##### USE ANALYTIC_NOMASKLONG MOVING FORWARD TO CALCULATE STATISTICS #####
+```
+
+```{r}
+### FOR THE SAKE OF THIS ASSIGNMENT, DROPPED MASKED VALUES "N<10"
+### RESHAPE FROM LONG TO WIDE
+
+analytic_nomaskwide <- pivot_wider(analytic_nomasklong,
+                                   c(schnme, schid),
+                                   names_from = "stugrp_mtrc", 
+                                   values_from = mtrcnum
+)
+View(analytic_nomaskwide)
+
+##### USE ANALYTIC_NOMASKWIDE MOVING FORWARD TO CALCULATE STATISTICS #####
+```
+
+
+```{r}
+
+### OUTSTANDING ISSUES
+## (1) how to address "n<10" values -- is it better to drop or assign different value?
+##     for the sake this assignment, have dropped "n<10" values because unable to 
+##     discern when true value is 0 or 1:9
+## (2) how to revalue observations BEFORE pivoting 
+##     (e.g., A = Asian, B = Black, L = Latino, W = White )
+##     (e.g., 90attendcount = 90% Attendance, suscount = All Suspentions)
+## (3) how to create new column percentages ("mtrcperc"): 
+##         create new column for total students, 
+##         divide 2 columns to calculate percentages
+##         mutate "mtrcperc" column into numbers and multiply by 100
+
+```
+
