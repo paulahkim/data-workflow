@@ -1,0 +1,493 @@
+---
+title: "Paula Kim_Homework 1-5"
+class: "[2020 SPRING] Data Workflow"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+
+### SETUP ###
+
+# clear all prior work to ensure a clean environment
+rm(list=ls())
+
+# download dataset to intended working directory
+#https://drive.google.com/open?id=1p9CtNgDE5Lj1muEkxQqfOWdop2NiAEjV
+
+# set working directory to folder where dataset is saved
+setwd("~/Desktop/Data Workflow/R practice")
+
+# program to open tidyverse
+library(tidyverse)
+
+# program to open .csv and excel files
+library(readxl) 
+```
+
+```{r}
+### LOAD AND OPEN LEFT DATASET ###
+dc2019star <-read_excel("2019DCSchoolReportCardMetricScoresPublicData.xlsx", 
+                                   sheet = "School STAR Metric Scores"
+) 
+View(dc2019star)
+
+### PLAN TO MUNGE LEFT DATASET -- VARIABLES AND OBSERVATIONS TO KEEP ###
+
+### Variable descriptions pulled from "Data Dictionary" sheet in original Excel file
+## "LEA Name": name of local education agency (e.g., DC Public Schools)
+## "LEA Code": 3-4 digit identifier unique to each local education agency  
+#            ***will keep only observations "001" for DCPS and drop all others (charter, alternative); 
+#            renders LEA Name redundant because all kept observations reflect DCPS only
+## "School Name": name of school
+## "School Code": 3-4 digit identifier unique to each school
+## "School Framework": school's gradeband configuration 
+#            ***will keep only observations "Elementary School with Pre-Kindergarten" 
+#            ***drop others (Alternative Framework, Elementary School without Pre-Kindergarten,
+#            Middle School, High School)
+## "Student Group": STAR Framework measures performance for student groups with a minimum n size of 10
+#            ***will keep only observations for "All Students" in order to calculate percentages using
+#               information from separate dataset that is aggregated at school-level only 
+#               (e.g., numbers of students aggregated by race/ethnicity not available)
+#            ***will drop other study group designations
+## "Metric": STAR Framework metrics are designed to share information about student success and 
+#            progress using different data elements associated with positive student outcomes
+#            ***will keep "90% Attendance", "Meeting or Exceeding Expectations - ELA",
+#            "Meeting or Exceeding Expectations - Math" 
+#            ***will drop other metrics
+## "Metric Score": Score earned by the school on a given metric for a given student group
+#            ***will drop due to lack of clear documentation re: how scores are calculated   
+## "Metric N": Number of students in a given student group included for a given metric 
+## "Domain", "Floor", "Target", "Metric Points Earned", "Metric Points Possible" 
+#            ***will drop to keep dataset simple; provide limited insight in analysis
+## "School Year": 2018-2019
+#            ***will drop to keep dataset simple; all observations for 2018-2019 academic year
+```
+
+```{r}
+### LEFT DATASET | SELECT VARIABLES (i.e., columns) OF INTEREST 
+## drop "LEA Name", "Domain", Metric Score","Floor", "Target", "Metric Points Earned", 
+##      "Metric Points Possible", and "School Year" due to redundancy or limited utility in analysis   
+
+stardraft <- select(dc2019star,
+    "LEA Code","School Name","School Code","School Framework","Student Group","Metric","Metric N"       
+)
+View(stardraft)
+```
+
+
+```{r}
+### LEFT DATASET | RENAME VARIABLES (i.e., columns) OF INTEREST INTO ABBREVIATIONS
+
+stardraft2 <- rename(stardraft,
+                   leaid = "LEA Code", schnme = "School Name", schid = "School Code", 
+                   schtype = "School Framework", stugrp = "Student Group",
+                   mtrc = "Metric",mtrcnum = "Metric N"
+)
+View(stardraft2)
+```
+ 
+```{r}
+### LEFT DATASET | FILTER OBSERVATIONS (i.e., rows) OF INTEREST
+## leaid: keep only observations "001" for DCPS 
+#           and drop all others (e.g., charter, alternative)
+## schtype: keep only observations "Elementary School with Pre-Kindergarten" 
+#           and drop all others (e.g., elementary schools without pre-k, middle schools, high schools)
+## stugrp: keep only observations for "All Students"
+#           and drop all others 
+## mtrc: keep "90% Attendance", "Meeting or Exceeding Expectations - ELA",
+#           "Meeting or Exceeding Expectations - Math" 
+#           and drop all others 
+
+stardraft3 <- filter(stardraft2,
+    leaid == "001",
+    schtype == "Elementary School with Pre-Kindergarten",
+    stugrp == "All Students",
+    mtrc %in% c("90% Attendance",
+                "Meeting or Exceeding Expectations - ELA",
+                "Meeting or Exceeding Expectations - Math") 
+)
+View(stardraft3)
+```
+
+```{r}
+### LEFT DATASET | MUTATE VARIABLES (i.e., columns) OF INTEREST INTO NUMBERS
+
+stardraft4 <- mutate(stardraft3,
+    schid = as.numeric(schid),
+    mtrcnum = as.numeric(mtrcnum)
+)
+View(stardraft4)
+```
+
+```{r}
+### DOWNLOAD ENROLLMENT DATASET TO CALCULATE PERCENTAGES ###
+##  Per DC OSSE website: "The DC Official Code § 38-1804.02 (d) (2) requires an audit that evaluates the
+#   accuracy of the fall student enrollment count of the DC public schools and the public charter 
+#   schools. An independent auditing firm is contracted by the Office of the State Superintendent of
+#   Education to conduct the count. 
+
+##  For the purposes of this assignment, I apply the updated OCTOBER enrollment audit data for the
+#   2018-2019 school year to calculate rough percentages of students counted as having met a
+#   90% attendance rate, meeting or exceeding expectations in ELA, and meeting or exceeding 
+#   expectations in math. It is important to note that such END-OF-YEAR calculations do not reflect
+#   changes in student enrollment across the school year and thus provide an imperfect measure.
+
+# download dataset to intended working directory
+#https://osse.dc.gov/sites/default/files/dc/sites/osse/page_content/attachments/2018-19%20School%20Year%20Annual%20Enrollment%20Audit%20Report%20Supplemental%20Tables.xlsx
+```
+
+```{r}
+### LOAD AND OPEN ENROLLMENT DATASET ###
+dc2019enroll <-read_excel("2018-19 DC School Year Annual Enrollment Audit Report Supplemental Tables.xlsx", 
+                                   sheet = "School Summary"
+) 
+View(dc2019enroll)
+
+### PLAN TO MUNGE ENROLLMENT DATASET -- VARIABLES AND OBSERVATIONS TO KEEP ###
+
+## "LEA Code": 3-4 digit identifier unique to each local education agency  
+#            ***will keep only observations "001" for DCPS and drop all others (charter, alternative); 
+#            renders LEA Name redundant because all kept observations reflect DCPS only
+## "School Name": name of school
+## "School Code": 3-4 digit identifier unique to each school
+## "Audited Enrollments": confirmed DC residents enrolled in DCPS during October audit
+#   "Unaudited Enrollments", "UPSFF", "Non-Public", "Tuition paying non-resident", "Unverified resident",
+#   "Unverified resident - Non-public" 
+#            ***will drop to keep dataset simple; provide limited insight in analysis
+```
+
+```{r}
+### ENROLLMENT DATASET | SELECT VARIABLES (i.e., columns) OF INTEREST 
+## drop "Unaudited Enrollments", "UPSFF", "Non-Public", "Tuition paying non-resident", "Unverified
+#        resident", "Unverified resident - Non-public"   
+
+enrolldraft <- select(dc2019enroll,
+    "LEA Code","School Name","School Code","Audited Enrollments"       
+)
+View(enrolldraft)
+```
+
+```{r}
+### ENROLLMENT DATASET | RENAME VARIABLES (i.e., columns) OF INTEREST INTO ABBREVIATIONS
+
+enrolldraft2 <- rename(enrolldraft,
+                   leaid = "LEA Code", schnme = "School Name", schid = "School Code", 
+                   auditenroll = "Audited Enrollments"
+)
+View(enrolldraft2)
+```
+
+```{r}
+### ENROLLMENT DATASET | FILTER OBSERVATIONS (i.e., rows) OF INTEREST
+## leaid: keep only observations "001" for DCPS 
+#           and drop all others (e.g., charter, alternative)
+
+enrolldraft3 <- filter(enrolldraft2,
+    leaid == "1",
+)
+View(enrolldraft3)
+```
+
+```{r}
+### JOIN LEFT AND ENROLLMENT DATASETS
+## NB: this action serves to filter schtypes != "Elementary School with Pre-Kindergarten" from
+#      enrolldraft3
+
+combine_starenroll <- left_join(
+    stardraft4, enrolldraft3, by="schid"
+)
+View(combine_starenroll)
+```
+
+```{r}
+### LEFT DATASET | CHECK FOR MISSING DATA 
+
+View(
+   filter(combine_starenroll, !complete.cases(combine_starenroll))
+)
+# no missing data found 
+```
+
+```{r}
+### LEFT DATASET | CREATE NEW COLUMN AND CALCULATE PERCENTAGES (MTRCNUM DIVIDED BY AUDITENROLL) 
+### LEFT DATASET | ROUND PERCENTAGE VALUES TO 1 DECIMAL POINT
+
+combine_starenroll2 <- mutate(combine_starenroll,
+    mtrcpct = mtrcnum / auditenroll,
+    mtrcpct = mtrcpct*100
+) %>% 
+    mutate_at(vars(mtrcpct), round, 1
+)
+View(combine_starenroll2)
+```
+
+```{r}
+### LEFT DATASET | SELECT AND REMOVE REDUNDANT IDENTIFIER COLUMN
+##  remove "leaid.x" and "leaid.y": all observations are from DCPS
+##  remove "schtype": all observations are Elementary Schools with Pre-Kindergarten
+##  remove "stugrp": all observations represent school-level aggregation (i.e., "All Students")
+##  remove "schnme.y": redundant identifier column
+
+combine_starenroll3 <- select(combine_starenroll2,
+    -leaid.x, -leaid.y,  -schtype, -stugrp, -schnme.y                        
+)
+View(combine_starenroll3)
+```
+
+```{r}
+### LEFT DATASET | RENAME IDENTIFIER COLUMN
+
+combine_starenroll4 <- rename(combine_starenroll3,
+    schnme = "schnme.x"               
+)
+View(combine_starenroll4)
+```
+
+```{r}
+### LEFT DATASET | RESHAPE FROM LONG TO WIDE BY SCHID
+
+combine_starenroll_wide <- pivot_wider(combine_starenroll4,
+                         c(schnme,schid),
+                           names_from = mtrc,
+                           values_from = mtrcpct
+)
+View(combine_starenroll_wide)
+```
+
+```{r}
+### LEFT DATASET | RESHAPE FROM WIDE TO LONG 
+
+combine_starenroll_long <- pivot_longer(combine_starenroll_wide,
+                          -c(schnme,schid),
+                             names_to = "mtrc",
+                             values_to = "mtrcperc"
+) %>% mutate(mtrc = as.factor(mtrc)
+)
+View(combine_starenroll_long)
+```
+
+```{r}
+### LOAD AND OPEN RIGHT DATASET ###
+dc2019card <-read_excel("2019DCSchoolReportCardMetricScoresPublicData.xlsx", 
+                                   sheet = "School Report Card Only Metrics"
+)
+View(dc2019card)
+
+### PLAN TO MUNGE RIGHT DATASET -- VARIABLES AND OBSERVATIONS TO KEEP ###
+
+### Variable descriptions pulled from "Data Dictionary" sheet in original Excel file
+## "LEA Name": name of local education agency (e.g., DC Public Schools)
+## "LEA Code": 3-4 digit identifier unique to each local education agency  
+#            ***will keep only observations "001" for DCPS and drop all others (charter, alternative); 
+#            renders LEA Name redundant because all kept observations reflect DCPS only
+## "School Name": name of school
+## "School Code": 3-4 digit identifier unique to each school
+## "Student Group": DC School Report Card includes metrics for student groups with a minimum n size of 10
+#            ***will keep only observations for 7 ESSA-defined racial/ethnic groups: 
+#            "American Indian or Alaskan Native", "Asian","Black or African American",
+#            "Hispanic/Latino of any race", "Native Hawaiian or Other Pacific Islander", 
+#            "Two or more races", White" 
+#            ***will drop other study group designations
+## "Metric": DC School Report Card  metrics are designed to share information about student success and 
+#            progress using different data elements associated with positive student outcomes
+#            ***will keep "All Suspensions", "Incidents of Violence Count", "Harassment Count"
+#            ***will drop other metrics
+## "Metric Score": Score earned by the school on a given metric for a given student group
+#            ***will drop due to lack of clear documentation re: how scores are calculated   
+## "Metric N": Number of students in a given student group included for a given metric 
+## "School Year": 2018-2019
+#            ***will drop to keep dataset simple; all observations for 2018-2019 academic year
+```
+
+```{r}
+### RIGHT DATASET | SELECT VARIABLES (i.e., columns) OF INTEREST 
+## drop "LEA Name","Metric Score", and "School Year" due to redundancy or limited utility in analysis
+
+carddraft <- select(dc2019card,
+    "LEA Code","School Name","School Code","Student Group","Metric","Metric N"                  
+)
+View(carddraft)
+```
+
+```{r}
+### RIGHT DATASET | RENAME VARIABLES (i.e., columns) OF INTEREST INTO ABBREVIATIONS
+
+carddraft2 <- rename(carddraft,
+                       leaid = "LEA Code", schnme = "School Name", schid = "School Code", 
+                       stugrp = "Student Group", mtrc = "Metric", mtrcnum = "Metric N"
+) 
+View(carddraft2)
+```
+
+```{r}
+### RIGHT DATASET | FILTER OBSERVATIONS (i.e., rows) OF INTEREST
+## leaid: keep only observations "001" for DCPS 
+#           and drop all others (e.g., charter, alternative)
+## stugrp: keep only observations for "All Students"
+#           and drop all others 
+## mtrc: keep "Incidents of Violence Count"
+#           and drop all others 
+
+carddraft3 <- filter(carddraft2,
+                       leaid == "001",
+                       stugrp == "All Report Card Students",
+                       mtrc == "Incidents of Violence Count"
+)
+View(carddraft3)
+```
+
+```{r}
+### RIGHT DATASET | RENAME AND MUTATE "MTRCNUM" VARIABLE
+
+card_wide <- rename(carddraft3,
+                       violentincidcount = "mtrcnum"
+) %>% mutate(
+    schid = as.numeric(schid),
+    violentincidcount = as.numeric(violentincidcount)
+)
+View(card_wide)
+```
+
+```{r}
+### JOIN RIGHT AND LEFT WIDE DATASETS
+## NB: this action serves to filter schtypes != "Elementary School with Pre-Kindergarten" from card_wide
+
+analyticdraft_wide <- left_join(
+    combine_starenroll_wide, card_wide, by="schid"
+)
+View(analyticdraft_wide)
+```
+
+```{r}
+### COMBINED DATASET | CHECK FOR MISSING DATA
+View(
+   filter(analyticdraft_wide, !complete.cases(analyticdraft_wide))
+)
+## found missing values for Peabody Elementary School (Capitol Hill Cluster) in stardraft;
+## reason for missing values is unknown
+```
+
+```{r}
+### COMBINED DATASET | SELECT AND REMOVE MISSING DATA (i.e., Peabody Elementary School)
+analyticdraft_wide2 <- filter(analyticdraft_wide,
+    schid != "301"
+)
+View(analyticdraft_wide2)
+## found missing values for Peabody Elementary School (Capitol Hill Cluster) in stardraft;
+## reason for missing values is unknown
+```
+
+```{r}
+### COMBINED DATASET | SELECT AND REMOVE REDUNDANT IDENTIFIER COLUMN
+
+analytic_wide <- select(analyticdraft_wide2,
+     -leaid, -schnme.y, -stugrp, -mtrc
+)
+View(analytic_wide)
+```
+
+```{r}
+### COMBINED DATASET | RENAME COLUMNS FOR ANALYTIC_WIDE
+
+analytic_wide <- rename(analytic_wide,
+     schnme = "schnme.x",
+     attend90perc = "90% Attendance",
+     meetorexceedELAperc = "Meeting or Exceeding Expectations - ELA",
+     meetorexceedmathperc = "Meeting or Exceeding Expectations - Math",
+)
+View(analytic_wide)
+```
+
+```{r}
+### COMBINED DATASET | RESHAPE FROM WIDE TO LONG 
+
+analytic_long <- pivot_longer(analytic_wide,
+                 -c(schnme,schid),
+                    names_to = "mtrc",
+                    values_to = "value"
+) %>% mutate(mtrc = as.factor(mtrc)
+)
+View(analytic_long)
+
+```
+
+
+
+
+
+```{r}
+### INSTALL AND LOAD PACKAGES FOR STATISTICAL ANALYSIS
+
+library(summarytools)
+library(stargazer)
+```
+
+```{r}
+### STATISTICAL ANALYSIS | DESCRIPTIVE STATISTICS
+
+with(analytic_wide, descr(attend90perc))
+with(analytic_wide, descr(meetorexceedELAperc))
+with(analytic_wide, descr(meetorexceedmathperc))
+with(analytic_wide, descr(violentincidcount))
+```
+
+```{r}
+### STATISTICAL ANALYSIS | FREQUENCY TABLES
+
+with(analytic_wide, freq(attend90perc))
+with(analytic_wide, freq(meetorexceedELAperc))
+with(analytic_wide, freq(meetorexceedmathperc))
+with(analytic_wide, freq(violentincidcount))
+```
+
+```{r}
+### STATISTICAL ANALYSIS | CONTINGENCY TABLES
+
+with(analytic_long, ctable(schid, mtrc, prop="n"))
+```
+
+```{r}
+### STATISTICAL ANALYSIS | CORRELATION TABLE
+
+with(analytic_wide, cor(select(analytic_wide, attend90perc, meetorexceedELAperc, meetorexceedmathperc,violentincidcount)))
+```
+
+```{r}
+### STATISTICAL ANALYSIS | LINEAR REGRESSION
+
+fit_lr <- lm(meetorexceedELAperc ~ attend90perc, data=analytic_wide)
+
+summary(fit_lr)
+```
+
+```{r}
+### STATISTICAL ANALYSIS | MULTIPLE REGRESSION
+
+fit_mr <- lm(meetorexceedELAperc ~ attend90perc + meetorexceedmathperc + violentincidcount, data=analytic_wide)
+
+summary(fit_mr)
+```
+
+```{r}
+### STATISTICAL ANALYSIS | Regression Tables
+
+fit_model_1 <- lm(meetorexceedELAperc ~ attend90perc, data=analytic_wide)
+fit_model_2 <- lm(meetorexceedELAperc ~ violentincidcount, data=analytic_wide)
+fit_model_3 <- lm(meetorexceedELAperc ~ meetorexceedmathperc + attend90perc, data=analytic_wide)
+fit_model_4 <- lm(meetorexceedELAperc ~ meetorexceedmathperc + attend90perc + violentincidcount, data=analytic_wide)
+
+suppressWarnings(
+  stargazer(fit_model_1, fit_model_2, fit_model_3, fit_model_4, type="text"))
+```
+
+```{r}
+
+### OUTSTANDING ISSUES
+## (1) how to address "n<10" values -- is it better to drop or assign different value?
+##     for the sake this assignment, have dropped "n<10" values because unable to 
+##     discern when true value is 0 or 1:9
+```
+
