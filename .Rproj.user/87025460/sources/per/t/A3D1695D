@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1584978938012.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2743895928",
+    "id" : "A3D1695D",
+    "lastKnownWriteTime" : 1584979376,
+    "last_content_update" : 1584979376297,
+    "path" : "~/GitHub/data-workflow/3.11.2020_PK R notebook.Rmd",
+    "project_path" : "3.11.2020_PK R notebook.Rmd",
+    "properties" : {
+        "cursorPosition" : "498,48",
+        "last_setup_crc32" : "5C592F2Ea2e279e3",
+        "scrollLine" : "443"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}
